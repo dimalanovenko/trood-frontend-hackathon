@@ -1,125 +1,108 @@
-import { NavigateFunction, useNavigate, useParams } from "react-router";
-import {
-    useDeleteProjectMutation,
-    useGetProjectQuery,
-    useGetVacanciesQuery,
-    usePutProjectMutation
-} from "../services/api";
-import Title from "../components/ui/Title";
-import Text from "../components/ui/Text";
-import PageContainer from "../components/ui/PageContainer";
+import PageContainer from "../components/ui/PageContainer.tsx";
+import {NavigateFunction, useNavigate, useParams} from "react-router";
+import {useDeleteVacancyMutation, useGetVacanciesQuery, usePutVacancyMutation} from "../services/api.ts";
+import {Vacancy} from "../app/types.ts";
+import Title from "../components/ui/Title.tsx";
+import Button from "../components/ui/Button.tsx";
+import Text from "../components/ui/Text.tsx";
+import Selector from "../components/ui/Selector.tsx";
+import {ChangeEvent, useState} from "react";
 import Input from "../components/ui/Input.tsx";
 import TextArea from "../components/ui/TextArea.tsx";
-import Button from "../components/ui/Button.tsx";
-import { ChangeEvent, useState } from "react";
-import Selector from "../components/ui/Selector.tsx";
-import { Project, Vacancy } from "../app/types.ts";
 import Subtitle from "../components/ui/Subtitle.tsx";
 
-const ReadyProject = () => {
-    const { id } = useParams();
+const ChangeVacancy = () => {
 
-    // Fetching project and vacancies data from the server
-    const { data: project, isLoading, isError, refetch } = useGetProjectQuery(Number(id));
-    const [deleteProject] = useDeleteProjectMutation();
-    const [putProject] = usePutProjectMutation();
-    const { data: vacancies } = useGetVacanciesQuery(Number(id));
+    const {id, vacancyId} = useParams();
+    const {data: vacancies, refetch} = useGetVacanciesQuery(Number(id));
+    // Find the specific vacancy based on vacancyId
+    const vacancy: Vacancy | undefined = vacancies?.find((v: Vacancy): boolean => v.id === Number(vacancyId));
+    const [putVacancy] = usePutVacancyMutation();
+    const [deleteVacancy] = useDeleteVacancyMutation();
 
-    // Load project data from localStorage if available
-    const storageProjects: string = localStorage.getItem("projects") ?? '[]';
-    const projectsArr: Project[] = JSON.parse(storageProjects);
-    const storageProject: Project = (projectsArr.find((p: Project): boolean => p.id === project?.id) || project)!;
-
-    const [value, setValue] = useState({ ...project });
     const [isEdited, setIsEdited] = useState(false);
-
-    // Form validation states
-    const [isValid, setIsValid] = useState({
-        experience: true,
-        deadline: true,
-        description: true,
-    });
-    const isFormValid: boolean = Object.values(isValid).every(Boolean);
+    // Local copy of vacancy data for editing
+    const [value, setValue] = useState({...vacancy});
 
     const navigate: NavigateFunction = useNavigate();
 
-    // Display loading or error messages
-    if (isLoading) return <p>Project loading...</p>;
-    if (isError) return <p className="text-red-500">Project loading error</p>;
-
-    // Handle project deletion
+    // Function to handle deleting a vacancy
     const handleDelete: () => Promise<void> = async (): Promise<void> => {
         const confirmed: boolean = window.confirm('Are you sure you want to delete this project?');
         if (!confirmed) return;
 
         try {
-            await deleteProject(project?.id).unwrap();
-            await navigate('/projects');
+            await deleteVacancy(vacancy?.id).unwrap();
+            await navigate(`/projects/${id}`);
             await refetch();
         } catch (e) {
             console.error("error:", e);
         }
-    }
+    };
 
     const allOptions: string[] = ['Design', 'Development', 'Marketing'];
+
+    // Validation state for inputs
+    const [isValid, setIsValid] = useState({
+        name: true,
+        experience: true,
+        deadline: true,
+        description: true,
+        country: true,
+    });
+    const isFormValid: boolean = Object.values(isValid).every(Boolean); // Check if all fields are valid
 
     return (
         <PageContainer className='relative'>
             <div className='flex items-center justify-between mb-8'>
-                <Title text={project?.name}/>
+                <Title text={vacancy?.name}/>
                 {isEdited ? (
-                    <Button
-                        disabled={!isFormValid}
-                        className="disabled:opacity-50 disabled:cursor-not-allowed"
-                        text='Change Project'
-                        // Handle project update
-                        onClick={async (): Promise<void> => {
-                            await putProject({
-                                id: project?.id,
-                                project: {
-                                    experience: value.experience ?? project?.experience,
-                                    deadline: value.deadline ?? project?.deadline,
-                                    description: value.description ?? project?.description,
-                                    name: project?.name,
-                                }
-                            });
-                            await refetch();
-                            setIsEdited(false);
-                        }}
-                    />
-                ) : (
-                    <Button text='Delete project' onClick={handleDelete}/>
-                )
-                }
+                        <Button
+                            text='Change vacancy'
+                            disabled={!isFormValid}
+                            className="disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={async (): Promise<void> => {
+                                // Send updated vacancy data to the server
+                                await putVacancy({
+                                    id: vacancy?.id,
+                                    vacancy: {
+                                        country: value.country || vacancy?.country,
+                                        description: value.description || vacancy?.description,
+                                        experience: value.experience || vacancy?.experience,
+                                        field: value.field || vacancy?.field,
+                                        id: value.id || vacancy?.id,
+                                        name: vacancy?.name,
+                                        project_id: value.project_id || vacancy?.project_id,
+                                    }
+                                });
+                                await refetch();
+                                setIsEdited(false);
+                            }}
+                        />
+                    )
+                    : (
+                        <Button text='Delete vacancy' onClick={handleDelete}/>
+                    )}
             </div>
             <div className='bg-white rounded-3xl pl-14.75 pr-19.25 pt-13.75 h-full'>
                 <div className="grid grid-cols-3 grid-rows-3 items-start gap-6 h-76.75 mb-10">
-                    {/* Field selector */}
+                    {/* Dropdown to select vacancy field */}
                     <div className="flex flex-col gap-2.5">
                         <Text text='Field'/>
                         <Selector
                             onChange={(e: ChangeEvent<HTMLSelectElement>): void => {
-                                const updatedField = e.target.value;
-
-                                const updatedProject = {
-                                    ...storageProject,
-                                    field: updatedField
-                                };
-
-                                // Save updated field to localStorage
-                                localStorage.setItem(`field-${updatedProject?.id}`, updatedField);
-                                setValue(prev => ({
-                                    ...prev,
-                                    field: updatedField
-                                }));
-
+                                setValue({
+                                    ...value, field: e.target.value
+                                });
                                 setIsEdited(true);
                             }}
-                            value={String(localStorage.getItem(`field-${storageProject.id}`)) || ''}
+                            value={value.field ?? vacancy?.field}
                             classCaret='right-4'
                             classSelect='pl-5'
                         >
+                            {/* Show current field as the first option */}
                             <option value={value.field}>{value.field}</option>
+                            {/* List other available fields */}
                             {allOptions
                                 .filter(opt => opt !== value.field)
                                 .map(opt => (
@@ -130,7 +113,7 @@ const ReadyProject = () => {
                         </Selector>
                     </div>
 
-                    {/* Experience input */}
+                    {/* Input for experience */}
                     <div className="flex flex-col gap-2.5">
                         <Text text='Experience'/>
                         <Input
@@ -141,16 +124,17 @@ const ReadyProject = () => {
                                     ...value,
                                     experience: experienceValue
                                 });
+
                                 setIsEdited(true);
 
-                                // Validate experience field
+                                // Validation: 6-15 characters and must contain a digit
                                 if (experienceValue.length < 6 || experienceValue.length > 15 || !/\d/.test(experienceValue)) {
-                                    setIsValid({ ...isValid, experience: false });
+                                    setIsValid({...isValid, experience: false});
                                 } else {
-                                    setIsValid({ ...isValid, experience: true });
+                                    setIsValid({...isValid, experience: true});
                                 }
                             }}
-                            value={value.experience ?? project?.experience}
+                            value={value.experience}
                             className='pl-5.5'
                         />
                         <span className={`${isValid.experience ? 'hidden' : 'block'} text-red-500`}>
@@ -158,37 +142,38 @@ const ReadyProject = () => {
                         </span>
                     </div>
 
-                    {/* Deadline input */}
+                    {/* Input for country */}
                     <div className="flex flex-col gap-2.5">
-                        <Text text='Deadline'/>
+                        <Text text='Country'/>
                         <Input
                             onChange={(e: ChangeEvent<HTMLInputElement>): void => {
-                                const deadlineValue: string = e.target.value;
+                                const countryValue: string = e.target.value;
 
                                 setValue({
                                     ...value,
-                                    deadline: deadlineValue
+                                    country: countryValue
                                 });
+
                                 setIsEdited(true);
 
-                                // Validate deadline field
-                                if (!/^\d{2}\.\d{2}\.\d{4}$/.test(deadlineValue)) {
-                                    setIsValid({ ...isValid, deadline: false });
+                                // Validation: 2-10 characters
+                                if (countryValue.length < 2 || countryValue.length > 10) {
+                                    setIsValid({...isValid, country: false});
                                 } else {
-                                    setIsValid({ ...isValid, deadline: true });
+                                    setIsValid({...isValid, country: true});
                                 }
                             }}
-                            value={value.deadline ?? project?.deadline}
+                            value={value.country}
                             className='pl-5.5'
                         />
-                        <span className={`${isValid.deadline ? 'hidden' : 'block'} text-red-500`}>
-                            Write down a valid deadline
+                        <span className={`${isValid.country ? 'hidden' : 'block'} text-red-500`}>
+                            Write down a valid country
                         </span>
                     </div>
 
-                    {/* Description input */}
+                    {/* Textarea for description */}
                     <div className="flex flex-col gap-2.5 col-span-3">
-                        <Text text='Description'/>
+                        <Text text='Descriprion'/>
                         <TextArea
                             onChange={(e: ChangeEvent<HTMLTextAreaElement>): void => {
                                 const descriptionValue: string = e.target.value;
@@ -197,16 +182,17 @@ const ReadyProject = () => {
                                     ...value,
                                     description: descriptionValue
                                 });
+
                                 setIsEdited(true);
 
-                                // Validate description field
+                                // Validation: 6-1000 characters
                                 if (descriptionValue.length < 6 || descriptionValue.length > 1000) {
                                     setIsValid({ ...isValid, description: false });
                                 } else {
                                     setIsValid({ ...isValid, description: true });
                                 }
                             }}
-                            value={value.description ?? project?.description}
+                            value={value.description}
                             className='pl-5.5 pt-5'
                         />
                         <span className={`${isValid.description ? 'hidden' : 'block'} text-red-500`}>
@@ -215,13 +201,7 @@ const ReadyProject = () => {
                     </div>
                 </div>
 
-                {/* Add vacancy button */}
-                <Button
-                    text='Add vacancy'
-                    onClick={() => navigate(`/projects/${project?.id}/create-vacancy`)}
-                />
-
-                {/* List of hired people */}
+                {/* List of hired people (vacancies) */}
                 <Title text='Hired people' className='mt-9.5'/>
                 <ul>
                     {vacancies?.length !== 0 ? vacancies?.map((vacancy: Vacancy) => (
@@ -236,13 +216,13 @@ const ReadyProject = () => {
                             <div className='bg-bg w-14.75 h-10 rounded-2xl flex items-center justify-center'>
                                 <span className='text-lg font-bold'>9/10</span>
                             </div>
-                            {/* Button to navigate to vacancy edit page */}
-                            <button onClick={() => navigate(`/projects/${project?.id}/change-vacancy/${vacancy.id}`)}>
+                            {/* Button to navigate to edit specific vacancy */}
+                            <button onClick={() => navigate(`/projects/${id}/change-vacancy/${vacancy.id}`)}>
                                 <Text text='More&nbsp;&nbsp;→' className='cursor-pointer'/>
                             </button>
                         </li>
                     )) : (
-                        // Message when there are no vacancies
+                        // Message if no vacancies are available
                         <div className='h-28 flex items-center'>
                             <Text text='There are any vacancies.'/>
                         </div>
@@ -250,7 +230,7 @@ const ReadyProject = () => {
                 </ul>
             </div>
         </PageContainer>
-    );
-};
+    )
+}
 
-export default ReadyProject;
+export default ChangeVacancy;
