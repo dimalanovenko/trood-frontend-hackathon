@@ -1,3 +1,12 @@
+vite.config.ts
+tsconfig.node.json
+tsconfig.json
+tsconfig.app.json
+package-lock.json
+package.json
+eslint.config.js
+vite-env.d.ts
+
 # Logs
 logs
 *.log
