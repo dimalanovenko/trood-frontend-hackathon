@@ -53,4 +53,4 @@ Run the tests:
 
 The application is hosted on Vercel. You can access the deployed version via the following link:
 
-https://trood-frontend-hackathon-jklwr0j2n-dimalandys-projects.vercel.app
+https://trood-frontend-hackathon.vercel.app
